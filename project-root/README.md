@@ -14,15 +14,21 @@ implements **Sprint 1 only**: database foundation + report submission.
 
 - PostgreSQL schema: `User`, `Location`, `Report`, `Observation`
 - `POST /api/reports` — citizen submits photo + coordinates (+ optional
-  stream name / description)
-- `GET /api/reports/{id}` — fetch a single report
+  stream name / description); AI vision analysis then runs in the
+  background
+- `GET /api/reports/{id}` — fetch a single report (poll this to see status
+  move SUBMITTED → ANALYZING → ANALYZED)
 - `GET /api/reports` — paginated list
 - Local disk image storage (dev only — swap for S3/GCS before production)
 - Anonymous reporting (no auth yet — `Report.user_id` is nullable)
+- Gemini vision analysis (`image_analysis_service`) — extracts observable
+  indicators (algae, color anomaly, visible waste, turbidity, image
+  quality, model confidence) into the `Observation` row, isolated behind
+  `vision_service.py` so swapping providers later is a one-file change
 
-Explicitly **not** built yet: AI vision analysis, evidence fusion, baseline
-comparison, case creation, officer review, FHIR export, real auth. Those are
-later sprints.
+Explicitly **not** built yet: evidence fusion, baseline comparison, case
+creation, officer review, FHIR export, real auth, a retry endpoint for
+failed analyses. Those are later sprints.
 
 ## Project structure
 
@@ -104,29 +110,39 @@ Open http://localhost:3000 — a form to submit a stream observation
 | `CORS_ORIGINS` | Comma-separated allowed frontend origins | `http://localhost:3000` |
 | `UPLOAD_DIR` | Local folder for uploaded images | `uploads` |
 | `MAX_UPLOAD_SIZE_MB` | Max image size | `8` |
+| `GEMINI_API_KEY` | Gemini API key for vision analysis | *(required for analysis to run — get one at https://aistudio.google.com/apikey)* |
+| `GEMINI_MODEL` | Gemini model to call | `gemini-3.5-flash` |
 
 **Frontend** (`frontend/.env.local`):
 | Variable | Purpose | Default |
 |---|---|---|
 | `NEXT_PUBLIC_API_BASE_URL` | Backend API base URL | `http://localhost:8000/api` |
 
-## Known limitations (Sprint 1)
+## Known limitations (Sprint 1 + 2)
 
-- No AI analysis — `Observation` rows are never populated yet.
-- No location deduplication — every report creates a new `Location` row,
-  even at identical coordinates. Clustering nearby points into a shared
-  monitoring point belongs to `baseline_service` in a later sprint.
+- No location dedup — every report creates a new `Location` row, even at
+  identical coordinates. Clustering nearby points into a shared monitoring
+  point belongs to `baseline_service` in a later sprint.
 - No authentication — reports are anonymous (`user_id` is nullable).
 - Local disk storage only — not suitable for production/multi-instance
   deployment.
 - `create_all()` schema management, not Alembic migrations.
+- If Gemini analysis fails (bad key, network error, unparseable response),
+  the report silently reverts to `SUBMITTED` — there's no retry endpoint or
+  user-facing error yet. Check server logs to see why.
+- The Gemini call itself was **not** tested live in this build environment
+  (no network egress to `generativelanguage.googleapis.com` here) — it was
+  verified structurally (correct request/response shape against the
+  documented API) and the surrounding pipeline (status transitions, DB
+  writes, error handling) was tested with a mocked HTTP layer. Confirm the
+  real call works once you run it with your key.
 
 ## Next sprint recommendation
 
-**Sprint 2: AI vision analysis service.** Wire `image_analysis_service` to
-call the Gemini vision model on a newly submitted report's image, populate
-the `Observation` row (algae indicator, color anomaly, visible waste,
-turbidity, image quality, model confidence), and move `Report.status` from
-`SUBMITTED` → `ANALYZING` → `ANALYZED`. Keep it isolated behind a service
-boundary so evidence_fusion_service can consume its output later without
-coupling to the model provider.
+**Sprint 3: evidence fusion foundations.** Now that `Observation` rows get
+populated, start `evidence_fusion_service`: given a new analyzed report,
+find nearby reports (`find_related_reports`) within a time/distance window
+of the same location, and lay the groundwork for `baseline_service` (a
+per-location baseline to compare against) and `confidence_service`
+(corroboration/disagreement scoring). This is the layer the spec calls the
+actual "core innovation" — worth designing carefully rather than rushing.

@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     upload_dir: str = "uploads"
     max_upload_size_mb: int = 8
 
+    # --- Gemini vision analysis (Sprint 2) ---
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-3.5-flash"
+    gemini_api_base: str = "https://generativelanguage.googleapis.com/v1beta"
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property

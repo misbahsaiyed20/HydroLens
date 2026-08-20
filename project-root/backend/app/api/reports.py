@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File, Form, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
@@ -8,6 +8,7 @@ from app.models.report import Report
 from app.models.location import Location
 from app.schemas.report import ReportOut, ReportListOut
 from app.services.storage_service import save_report_image
+from app.services.analysis_service import analyze_report_task
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -21,6 +22,7 @@ def _report_query(db: Session):
 
 @router.post("", response_model=ReportOut, status_code=201)
 async def create_report(
+    background_tasks: BackgroundTasks,
     latitude: float = Form(..., ge=-90, le=90),
     longitude: float = Form(..., ge=-180, le=180),
     stream_name: str | None = Form(default=None),
@@ -31,9 +33,10 @@ async def create_report(
 ):
     """
     Citizen submits a stream observation: photo + coordinates + optional
-    description. This is intentionally the ONLY write path in Sprint 1 —
-    no AI analysis, no evidence fusion, no case creation yet. Those hang off
-    this same Report row in later sprints.
+    description. The report is created and returned as SUBMITTED
+    immediately; AI vision analysis (Sprint 2) then runs in the background
+    and moves it through ANALYZING -> ANALYZED, populating Observation.
+    Evidence fusion and case creation still come in later sprints.
     """
     contents = await image.read()
     if not contents:
@@ -58,6 +61,8 @@ async def create_report(
     db.add(report)
     db.commit()
     db.refresh(report)
+
+    background_tasks.add_task(analyze_report_task, report.id)
 
     return _report_query(db).filter(Report.id == report.id).first()
 
