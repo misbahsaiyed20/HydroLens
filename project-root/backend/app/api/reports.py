@@ -7,8 +7,14 @@ from app.database import get_db
 from app.models.report import Report
 from app.models.location import Location
 from app.schemas.report import ReportOut, ReportListOut
+from app.schemas.evidence import EvidenceFusionResult
 from app.services.storage_service import save_report_image
 from app.services.analysis_service import analyze_report_task
+from app.services.evidence_fusion_service import (
+    ReportNotAnalyzedError,
+    ReportNotFoundError,
+    get_evidence_for_report,
+)
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -90,3 +96,21 @@ def list_reports(
         .all()
     )
     return ReportListOut(total=total, items=items)
+
+
+@router.get("/{report_id}/evidence", response_model=EvidenceFusionResult)
+def get_report_evidence(report_id: uuid.UUID, db: Session = Depends(get_db)):
+    """
+    Sprint 3: fuses related reports + location baseline into an explainable
+    confidence assessment for this report. 404 if the report doesn't exist;
+    409 if it hasn't finished AI analysis yet (nothing to fuse evidence
+    from). A report with zero related reports and no baseline is NOT an
+    error — it just comes back with LOW confidence and an explanatory
+    reason, since insufficient evidence is a valid outcome, not a failure.
+    """
+    try:
+        return get_evidence_for_report(db, report_id)
+    except ReportNotFoundError:
+        raise HTTPException(status_code=404, detail="Report not found.")
+    except ReportNotAnalyzedError:
+        raise HTTPException(status_code=409, detail="Report has not completed AI analysis yet.")

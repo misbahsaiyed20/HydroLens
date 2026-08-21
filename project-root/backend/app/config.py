@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-3.5-flash"
     gemini_api_base: str = "https://generativelanguage.googleapis.com/v1beta"
 
+    # --- Evidence fusion (Sprint 3) ---
+    related_report_radius_meters: float = 300.0
+    related_report_time_window_minutes: int = 120
+    baseline_minimum_observations: int = 5
+    corroboration_saturation_count: int = 4
+    confidence_high_threshold: float = 0.70
+    confidence_moderate_threshold: float = 0.40
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property

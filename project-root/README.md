@@ -25,6 +25,10 @@ implements **Sprint 1 only**: database foundation + report submission.
   indicators (algae, color anomaly, visible waste, turbidity, image
   quality, model confidence) into the `Observation` row, isolated behind
   `vision_service.py` so swapping providers later is a one-file change
+- `GET /api/reports/{report_id}/evidence` — evidence-fusion engine: finds
+  related nearby/recent reports, compares against a location baseline, and
+  returns a deterministic, explainable confidence assessment. See
+  "Evidence fusion (Sprint 3)" below.
 
 Explicitly **not** built yet: evidence fusion, baseline comparison, case
 creation, officer review, FHIR export, real auth, a retry endpoint for
@@ -101,6 +105,53 @@ npm run dev
 Open http://localhost:3000 — a form to submit a stream observation
 (coordinates, optional stream name/description, required photo).
 
+## Evidence fusion (Sprint 3)
+
+`GET /api/reports/{report_id}/evidence` fuses a report with nearby/recent
+reports and a location baseline into an explainable confidence assessment.
+It never diagnoses or predicts outbreaks — only "environmental anomaly
+confidence" with human officer verification as the recommended action.
+
+**Related-report detection** (`related_report_service.py`): other
+`ANALYZED` reports within `RELATED_REPORT_RADIUS_METERS` (default 300m,
+haversine distance, stdlib `math` only) and
+`RELATED_REPORT_TIME_WINDOW_MINUTES` (default 120min, either direction) of
+the report being evaluated. `stream_name` match is attached as metadata
+(`same_stream_name`) but doesn't affect the score yet — see limitations.
+
+**Baseline** (`baseline_service.py`): the most common (mode) historical
+value per indicator, from *historical* reports at that location — meaning
+reports older than the current related-report time window, so the baseline
+can never be built from the very reports currently being scored as
+evidence (that would be circular). Needs at least
+`BASELINE_MINIMUM_OBSERVATIONS` (default 5) historical reports or
+`baseline.available = False` — never treated as "abnormal" by default.
+
+**Confidence scoring** (`confidence_service.py`) — deterministic, weighted
+sum of 6 sub-scores, each normalized to 0.0-1.0:
+
+| Component | Weight | What it measures |
+|---|---|---|
+| Corroboration | 30% | count of agreeing nearby reports, saturating at `CORROBORATION_SATURATION_COUNT` (4) to avoid rewarding duplicate spam |
+| Recency | 15% | how fresh the report + its corroborators are, relative to the time window |
+| Geographic consistency | 15% | how tightly corroborating reports cluster around this one |
+| Indicator agreement | 15% | fraction (not count) of nearby reports that agree — penalizes noisy/conflicting sets |
+| Image quality | 10% | average Gemini-reported image quality of this report + corroborators |
+| Baseline deviation | 15% | 1.0 only if a baseline exists AND this report deviates from it; 0.0 otherwise (including when no baseline exists) |
+
+`confidence_level`: `HIGH` if score >= `CONFIDENCE_HIGH_THRESHOLD` (0.70),
+`MODERATE` if >= `CONFIDENCE_MODERATE_THRESHOLD` (0.40), else `LOW`. A
+**conflict safety cap** additionally forces `HIGH` down to `MODERATE`
+whenever conflicting reports are at least as numerous as supporting ones,
+even if the raw weighted score alone would clear the threshold.
+
+**Evidence fusion** (`evidence_fusion_service.py`): orchestrates the above,
+classifies related reports as `supporting` or `conflicting` based on
+whether they agree with the evaluated report's anomaly signal, and returns
+`condition_summary` / `evidence_reasons` / `recommended_action` - the last
+is always either "Officer verification recommended." or "Continue
+monitoring...", never an automatic decision.
+
 ## Environment variables
 
 **Backend** (`backend/.env`):
@@ -118,31 +169,51 @@ Open http://localhost:3000 — a form to submit a stream observation
 |---|---|---|
 | `NEXT_PUBLIC_API_BASE_URL` | Backend API base URL | `http://localhost:8000/api` |
 
-## Known limitations (Sprint 1 + 2)
+## Known limitations (Sprint 1 + 2 + 3)
 
 - No location dedup — every report creates a new `Location` row, even at
-  identical coordinates. Clustering nearby points into a shared monitoring
-  point belongs to `baseline_service` in a later sprint.
+  identical coordinates. Related-report/baseline queries compensate for
+  this via radius search rather than requiring a shared `location_id`.
 - No authentication — reports are anonymous (`user_id` is nullable).
 - Local disk storage only — not suitable for production/multi-instance
   deployment.
 - `create_all()` schema management, not Alembic migrations.
-- If Gemini analysis fails (bad key, network error, unparseable response),
-  the report silently reverts to `SUBMITTED` — there's no retry endpoint or
-  user-facing error yet. Check server logs to see why.
-- The Gemini call itself was **not** tested live in this build environment
-  (no network egress to `generativelanguage.googleapis.com` here) — it was
-  verified structurally (correct request/response shape against the
-  documented API) and the surrounding pipeline (status transitions, DB
-  writes, error handling) was tested with a mocked HTTP layer. Confirm the
-  real call works once you run it with your key.
+- If Gemini analysis fails, the report silently reverts to `SUBMITTED` —
+  there's no retry endpoint yet.
+- The Gemini call itself was not tested live in this build environment (no
+  network egress here) — verified structurally + with a mocked HTTP layer.
+- **Evidence-fusion independence limitation**: there's no reporter identity
+  or source verification, so "corroboration" currently just counts report
+  rows near each other in space/time — it cannot distinguish five reports
+  from five different people from five re-submissions by one person.
+  `corroboration_score` saturates at `CORROBORATION_SATURATION_COUNT` (4)
+  reports specifically to avoid rewarding duplicate spam with unbounded
+  score growth, but this is a mitigation, not a real independence check.
+- **Sparse baseline**: locations with fewer than `BASELINE_MINIMUM_OBSERVATIONS`
+  (5) historical analyzed reports get `baseline.available = False`, and the
+  scoring formula treats that as neutral (contributes 0, not a penalty or
+  bonus) — but it does mean confidence for newly-monitored locations relies
+  more heavily on corroboration/recency/geography than baseline deviation.
+- **No verified-authority labels yet**: officer verification/dismissal
+  isn't implemented (that's the next sprint), so there's no ground-truth
+  feedback loop into the scoring yet.
+- **Simplified environmental interpretation**: `is_abnormal()` is a coarse
+  boolean gate (any indicator elevated → abnormal). It doesn't yet weigh
+  which indicator is more environmentally significant than another, or
+  handle partial/ambiguous indicator combinations beyond what's in
+  `evidence_reasons`.
+- `stream_name` match is surfaced as informational metadata
+  (`same_stream_name` on related reports) but does not yet affect the
+  score — left as a documented decision rather than an ad-hoc bonus term
+  bolted onto the weighted formula.
 
 ## Next sprint recommendation
 
-**Sprint 3: evidence fusion foundations.** Now that `Observation` rows get
-populated, start `evidence_fusion_service`: given a new analyzed report,
-find nearby reports (`find_related_reports`) within a time/distance window
-of the same location, and lay the groundwork for `baseline_service` (a
-per-location baseline to compare against) and `confidence_service`
-(corroboration/disagreement scoring). This is the layer the spec calls the
-actual "core innovation" — worth designing carefully rather than rushing.
+**Sprint 4: case creation + officer review.** Now that individual reports
+can be scored, group related+corroborating reports into a persisted `Case`
+(spec's `case_service`), expose it to an `officer_service` for
+verify/dismiss/request-more-evidence actions, and start feeding those
+verified/dismissed outcomes back as a signal for future confidence scoring.
+This is also the natural point to revisit reporter-independence handling,
+since a persisted Case is where "how many *independent* people reported
+this" starts to matter for real.
