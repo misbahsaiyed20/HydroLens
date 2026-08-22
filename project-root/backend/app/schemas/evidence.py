@@ -48,6 +48,7 @@ class EvidenceFusionResult(BaseModel):
     report_id: uuid.UUID
     confidence_score: float  # 0.0 - 1.0
     confidence_level: str  # LOW | MODERATE | HIGH
+    indicator_severity: str  # NONE | LOW | MODERATE | HIGH (Sprint 4: see indicator_scales.get_indicator_severity)
     condition_summary: str
     related_report_count: int
     supporting_observations: list[RelatedObservationSummary]

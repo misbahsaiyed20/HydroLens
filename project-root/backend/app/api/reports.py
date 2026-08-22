@@ -8,6 +8,7 @@ from app.models.report import Report
 from app.models.location import Location
 from app.schemas.report import ReportOut, ReportListOut
 from app.schemas.evidence import EvidenceFusionResult
+from app.schemas.actionability import ActionabilityResult
 from app.services.storage_service import save_report_image
 from app.services.analysis_service import analyze_report_task
 from app.services.evidence_fusion_service import (
@@ -15,6 +16,8 @@ from app.services.evidence_fusion_service import (
     ReportNotFoundError,
     get_evidence_for_report,
 )
+from app.services.actionability_service import get_actionability_for_report
+from app.services.fhir_service import get_fhir_observation_for_report
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -110,6 +113,42 @@ def get_report_evidence(report_id: uuid.UUID, db: Session = Depends(get_db)):
     """
     try:
         return get_evidence_for_report(db, report_id)
+    except ReportNotFoundError:
+        raise HTTPException(status_code=404, detail="Report not found.")
+    except ReportNotAnalyzedError:
+        raise HTTPException(status_code=409, detail="Report has not completed AI analysis yet.")
+
+
+@router.get("/{report_id}/actionability", response_model=ActionabilityResult)
+def get_report_actionability(report_id: uuid.UUID, db: Session = Depends(get_db)):
+    """
+    Sprint 4: converts the existing evidence-fusion result into an
+    operational review recommendation (CONTINUE_MONITORING /
+    REVIEW_RECOMMENDED / PRIORITY_REVIEW) plus an exposure-risk signal
+    (LOW / MODERATE / ELEVATED). Never a diagnosis — see
+    actionability_service.py and exposure_risk_service.py docstrings for
+    the scientific-safety framing. Same 404/409 semantics as /evidence.
+    """
+    try:
+        return get_actionability_for_report(db, report_id)
+    except ReportNotFoundError:
+        raise HTTPException(status_code=404, detail="Report not found.")
+    except ReportNotAnalyzedError:
+        raise HTTPException(status_code=409, detail="Report has not completed AI analysis yet.")
+
+
+@router.get("/{report_id}/fhir")
+def get_report_fhir(report_id: uuid.UUID, db: Session = Depends(get_db)) -> dict:
+    """
+    Sprint 4: FHIR-compatible Observation resource for this report (see
+    fhir_service.py). No response_model is declared — FHIR resources are
+    heterogeneous by design (component lists vary per report), and forcing
+    a rigid Pydantic schema here would mean either an incomplete mapping or
+    pulling in a full FHIR resource library, neither of which this sprint
+    calls for. Same 404/409 semantics as /evidence and /actionability.
+    """
+    try:
+        return get_fhir_observation_for_report(db, report_id)
     except ReportNotFoundError:
         raise HTTPException(status_code=404, detail="Report not found.")
     except ReportNotAnalyzedError:

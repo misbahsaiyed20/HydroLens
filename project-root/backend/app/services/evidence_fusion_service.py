@@ -16,6 +16,7 @@ from app.models.report import Report
 from app.schemas.evidence import EvidenceFusionResult, RelatedObservationSummary
 from app.services.baseline_service import get_location_baseline
 from app.services.confidence_service import calculate_confidence, is_abnormal
+from app.services.indicator_scales import get_indicator_severity
 from app.services.related_report_service import RelatedReport, find_related_reports
 
 
@@ -80,6 +81,7 @@ def get_evidence_for_report(db: Session, report_id: uuid.UUID) -> EvidenceFusion
         report_id=report.id,
         confidence_score=round(confidence.score, 3),
         confidence_level=confidence.level,
+        indicator_severity=get_indicator_severity(report.observation),
         condition_summary=condition_summary,
         related_report_count=len(related),
         supporting_observations=[_summarize(r) for r in confidence.supporting],

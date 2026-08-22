@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     confidence_high_threshold: float = 0.70
     confidence_moderate_threshold: float = 0.40
 
+    # --- Actionability (Sprint 4) ---
+    # Minimum corroborating (supporting) reports for HIGH confidence + HIGH
+    # severity to still escalate to PRIORITY_REVIEW rather than REVIEW_RECOMMENDED.
+    priority_review_min_supporting_count: int = 3
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property
