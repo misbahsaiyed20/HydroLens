@@ -1,10 +1,17 @@
 import uuid
 
 from app.schemas.evidence import BaselineSummary, EvidenceFusionResult
+from app.schemas.verification import EvidenceProvenanceSummary
 from app.services.exposure_risk_service import calculate_exposure_risk
 
 NO_BASELINE = BaselineSummary(available=False, historical_observation_count=0)
 DEVIATING_BASELINE = BaselineSummary(available=True, historical_observation_count=10, deviates=True)
+
+_NO_PROVENANCE = EvidenceProvenanceSummary(
+    evaluated_report_verification_status="UNVERIFIED",
+    supporting_verified_count=0, supporting_unverified_count=0, supporting_rejected_count=0,
+    conflicting_verified_count=0, conflicting_unverified_count=0, conflicting_rejected_count=0,
+)
 
 
 def _evidence(indicator_severity, confidence_level, confidence_score=0.5, baseline=NO_BASELINE):
@@ -20,6 +27,7 @@ def _evidence(indicator_severity, confidence_level, confidence_score=0.5, baseli
         baseline=baseline,
         evidence_reasons=[],
         recommended_action="test",
+        evidence_provenance=_NO_PROVENANCE,
     )
 
 

@@ -1,8 +1,8 @@
 """
 Deterministic, explainable confidence scoring for a report's evidence set.
 No ML model, no LLM call — every sub-score is a plain arithmetic function
-of stored data, chosen so a judge (or another developer) can trace exactly
-why a report received the score it did.
+of stored data, chosen so another developer (or a reviewer) can trace
+exactly why a report received the score it did.
 
 WEIGHTS (sum to 1.0):
 

@@ -1,10 +1,17 @@
 import uuid
 
 from app.schemas.evidence import BaselineSummary, EvidenceFusionResult, RelatedObservationSummary
+from app.schemas.verification import EvidenceProvenanceSummary
 from app.services.actionability_service import build_actionability_result, determine_action
 
 NO_BASELINE = BaselineSummary(available=False, historical_observation_count=0)
 DEVIATING_BASELINE = BaselineSummary(available=True, historical_observation_count=10, deviates=True)
+
+_NO_PROVENANCE = EvidenceProvenanceSummary(
+    evaluated_report_verification_status="UNVERIFIED",
+    supporting_verified_count=0, supporting_unverified_count=0, supporting_rejected_count=0,
+    conflicting_verified_count=0, conflicting_unverified_count=0, conflicting_rejected_count=0,
+)
 
 
 def _obs_summary():
@@ -31,6 +38,7 @@ def _evidence(
         baseline=baseline,
         evidence_reasons=["test reason"],
         recommended_action="test",
+        evidence_provenance=_NO_PROVENANCE,
     )
 
 

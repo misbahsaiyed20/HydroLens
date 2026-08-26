@@ -1,6 +1,6 @@
 """
 Great-circle distance via the haversine formula, stdlib math only. This is
-deliberately not PostGIS/pgvector — at hackathon-scale report volumes an
+deliberately not PostGIS/pgvector — at this project's report volume an
 O(n) candidate scan with a Python-side distance check is simple, correct,
 and dependency-free. Revisit with a spatial index if report volume grows
 large enough for this to become a bottleneck.

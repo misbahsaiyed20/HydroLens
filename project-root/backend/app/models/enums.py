@@ -18,3 +18,23 @@ class ReportStatus(str, enum.Enum):
     UNDER_REVIEW = "UNDER_REVIEW"
     VERIFIED = "VERIFIED"
     DISMISSED = "DISMISSED"
+
+
+class VerificationStatus(str, enum.Enum):
+    """
+    Whether a HUMAN has reviewed this report's AI-generated observation.
+    Deliberately separate from ReportStatus: ReportStatus answers "has the
+    image been analyzed by AI yet?" (SUBMITTED/ANALYZING/ANALYZED/...),
+    while VerificationStatus answers "has a person reviewed/confirmed that
+    AI output?". Conflating the two was a real risk here — ReportStatus
+    already has unused VERIFIED/DISMISSED values left over from an earlier
+    design; this enum exists specifically so verification isn't bolted onto
+    that AI-status enum. See README's "Trust architecture" section.
+
+    UNVERIFIED -> default state; no human has reviewed this report yet
+    VERIFIED   -> a human confirmed the AI observation is a reasonable read of the photo
+    REJECTED   -> a human reviewed it and determined it should not be treated as valid evidence
+    """
+    UNVERIFIED = "UNVERIFIED"
+    VERIFIED = "VERIFIED"
+    REJECTED = "REJECTED"

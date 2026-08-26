@@ -6,7 +6,7 @@ to create via the real upload API + mocked Gemini responses each time.
 """
 from datetime import datetime, timedelta, timezone
 
-from app.models.enums import ReportStatus
+from app.models.enums import ReportStatus, VerificationStatus
 from app.models.location import Location
 from app.models.observation import Observation
 from app.models.report import Report
@@ -28,6 +28,7 @@ def make_analyzed_report(
     image_quality: str | None = "good",
     model_confidence: float | None = 0.9,
     status: ReportStatus = ReportStatus.ANALYZED,
+    verification_status: VerificationStatus = VerificationStatus.UNVERIFIED,
 ) -> Report:
     location = Location(latitude=lat, longitude=lon, stream_name=stream_name)
     db.add(location)
@@ -38,6 +39,7 @@ def make_analyzed_report(
         location_id=location.id,
         image_path="test.png",
         status=status,
+        verification_status=verification_status,
         submitted_at=submitted_at,
         updated_at=submitted_at,
     )

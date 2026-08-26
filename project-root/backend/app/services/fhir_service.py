@@ -22,13 +22,31 @@ Scientific/data-integrity rules this module follows strictly:
   - No patient demographic or identifying fields are populated, because
     none exist in this system — inventing them would violate the "do not
     fabricate data" requirement.
+
+Sprint 5 update — status now reflects verification, still never overclaims:
+  - UNVERIFIED (default) -> "preliminary" (unchanged from Sprint 4)
+  - VERIFIED   -> "final": FHIR's own definition of "final" is "the
+    observation is complete and there are no further actions needed" —
+    that's a statement about the DATA'S review status, not a claim that
+    the environmental condition is scientifically proven. A human
+    confirming "yes, this observation is a reasonable read of the photo"
+    is exactly what FHIR "final" describes.
+  - REJECTED   -> "cancelled": FHIR's definition — "the result is no
+    longer valid and should not be used for any purpose" — matches a
+    human reviewer determining this observation shouldn't be treated as
+    valid evidence. The underlying photo/report row still exists; only
+    its evidentiary status is marked invalid.
+  - The verifier's identity (verifier_reference) is deliberately NOT
+    included in the resource — it may be a name/email, and this project
+    has no policy for what interoperability partners should do with that.
+    Only the non-identifying verification_status + timestamp are exposed.
 """
 import uuid
 from typing import Any
 
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.enums import ReportStatus
+from app.models.enums import ReportStatus, VerificationStatus
 from app.models.report import Report
 from app.schemas.evidence import EvidenceFusionResult
 from app.services.evidence_fusion_service import (
@@ -36,6 +54,12 @@ from app.services.evidence_fusion_service import (
     ReportNotFoundError,
     get_evidence_for_report,
 )
+
+_FHIR_STATUS_BY_VERIFICATION = {
+    VerificationStatus.UNVERIFIED: "preliminary",
+    VerificationStatus.VERIFIED: "final",
+    VerificationStatus.REJECTED: "cancelled",
+}
 
 
 def _round_or_none(value, digits=3):
@@ -77,6 +101,17 @@ def build_fhir_observation(report: Report, evidence: EvidenceFusionResult) -> di
     components.append({"code": {"text": "Evidence-fusion confidence level"}, "valueString": evidence.confidence_level})
     components.append({"code": {"text": "Related report count"}, "valueInteger": evidence.related_report_count})
 
+    # Sprint 5: verification status as a component (non-identifying — the
+    # verifier's name/email is deliberately excluded, see module docstring).
+    components.append({"code": {"text": "Verification status"}, "valueString": report.verification_status.value})
+
+    notes = [{"text": evidence.condition_summary}]
+    latest_event = report.verification_events[-1] if report.verification_events else None
+    if report.verification_status == VerificationStatus.VERIFIED and latest_event is not None:
+        notes.append({"text": f"Human-verified on {latest_event.created_at.isoformat()}Z."})
+    elif report.verification_status == VerificationStatus.REJECTED and latest_event is not None:
+        notes.append({"text": f"Marked rejected on human review on {latest_event.created_at.isoformat()}Z."})
+
     subject_display = "Unknown stream location"
     if location is not None:
         subject_display = f"Stream location ({location.latitude}, {location.longitude})"
@@ -87,14 +122,14 @@ def build_fhir_observation(report: Report, evidence: EvidenceFusionResult) -> di
         "resourceType": "Observation",
         "id": str(report.id),
         "identifier": [{"system": "urn:aqua-sentinel:report-id", "value": str(report.id)}],
-        "status": "preliminary",  # see module docstring — never "final" without human verification
+        "status": _FHIR_STATUS_BY_VERIFICATION[report.verification_status],
         "category": [{"text": "Environmental monitoring — citizen-reported stream observation"}],
         "code": {"text": "Citizen-reported urban stream environmental observation"},
         "subject": {"display": subject_display},
         "effectiveDateTime": report.submitted_at.isoformat() + "Z",
         "issued": report.updated_at.isoformat() + "Z",
         "component": components,
-        "note": [{"text": evidence.condition_summary}],
+        "note": notes,
     }
 
     return resource
@@ -107,7 +142,11 @@ def get_fhir_observation_for_report(db: Session, report_id: uuid.UUID) -> dict[s
     not-found/not-analyzed cases."""
     report = (
         db.query(Report)
-        .options(joinedload(Report.location), joinedload(Report.observation))
+        .options(
+            joinedload(Report.location),
+            joinedload(Report.observation),
+            joinedload(Report.verification_events),
+        )
         .filter(Report.id == report_id)
         .first()
     )

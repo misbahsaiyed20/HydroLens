@@ -4,7 +4,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
-from app.models.enums import ReportStatus
+from app.models.enums import ReportStatus, VerificationStatus
 from app.schemas.location import LocationOut
 from app.schemas.observation import ObservationOut
 
@@ -37,6 +37,10 @@ class ReportOut(BaseModel):
     image_path: str
     description: Optional[str] = None
     status: ReportStatus
+    # Sprint 5: deliberately separate from `status` above — `status` is AI
+    # analysis progress, this is human review state. See VerificationStatus
+    # docstring. Never conflate the two.
+    verification_status: VerificationStatus
     submitted_at: datetime
     updated_at: datetime
     location: LocationOut

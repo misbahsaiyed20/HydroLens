@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from app.database import Base
-from app.models.enums import ReportStatus
+from app.models.enums import ReportStatus, VerificationStatus
 
 
 class Report(Base):
@@ -29,6 +29,14 @@ class Report(Base):
 
     status = Column(SAEnum(ReportStatus), default=ReportStatus.SUBMITTED, nullable=False)
 
+    # Sprint 5: separate from `status` above on purpose — `status` tracks AI
+    # analysis progress, this tracks HUMAN review. See VerificationStatus
+    # docstring. Every report starts UNVERIFIED and stays that way unless a
+    # POST /verify call changes it — nothing in the AI pipeline touches this.
+    verification_status = Column(
+        SAEnum(VerificationStatus), default=VerificationStatus.UNVERIFIED, nullable=False
+    )
+
     submitted_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
@@ -36,4 +44,8 @@ class Report(Base):
     location = relationship("Location", back_populates="reports")
     observation = relationship(
         "Observation", back_populates="report", uselist=False, cascade="all, delete-orphan"
+    )
+    verification_events = relationship(
+        "VerificationEvent", back_populates="report",
+        order_by="VerificationEvent.created_at", cascade="all, delete-orphan"
     )
