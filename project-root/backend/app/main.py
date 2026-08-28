@@ -17,6 +17,8 @@ from app.config import get_settings
 from app.database import Base, engine
 from app.models import *  # noqa: F401,F403 - ensures every model is registered on Base before create_all
 from app.api.reports import router as reports_router
+from app.api.dashboard import router as dashboard_router
+from app.api.cases import router as cases_router
 
 settings = get_settings()
 
@@ -48,6 +50,8 @@ Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
 
 app.include_router(reports_router, prefix=settings.api_prefix)
+app.include_router(dashboard_router, prefix=settings.api_prefix)
+app.include_router(cases_router, prefix=settings.api_prefix)
 
 
 @app.get("/health")

@@ -3,6 +3,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
+from app.schemas.verification import EvidenceProvenanceSummary
+
 
 class BaselineSummary(BaseModel):
     """
@@ -35,6 +37,7 @@ class RelatedObservationSummary(BaseModel):
     turbidity_indicator: Optional[str] = None
     visible_waste: Optional[bool] = None
     image_quality: Optional[str] = None
+    verification_status: str = "UNVERIFIED"  # Sprint 5: UNVERIFIED | VERIFIED | REJECTED
 
 
 class EvidenceFusionResult(BaseModel):
@@ -56,3 +59,4 @@ class EvidenceFusionResult(BaseModel):
     baseline: BaselineSummary
     evidence_reasons: list[str]
     recommended_action: str
+    evidence_provenance: EvidenceProvenanceSummary  # Sprint 5: AI-only vs human-verified breakdown

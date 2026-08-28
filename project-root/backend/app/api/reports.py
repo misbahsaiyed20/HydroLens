@@ -18,6 +18,8 @@ from app.services.evidence_fusion_service import (
 )
 from app.services.actionability_service import get_actionability_for_report
 from app.services.fhir_service import get_fhir_observation_for_report
+from app.schemas.verification import VerificationRequest, VerificationHistoryOut
+from app.services.verification_service import get_verification_history, submit_verification
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -153,3 +155,36 @@ def get_report_fhir(report_id: uuid.UUID, db: Session = Depends(get_db)) -> dict
         raise HTTPException(status_code=404, detail="Report not found.")
     except ReportNotAnalyzedError:
         raise HTTPException(status_code=409, detail="Report has not completed AI analysis yet.")
+
+
+@router.post("/{report_id}/verify", response_model=VerificationHistoryOut)
+def verify_report(report_id: uuid.UUID, request: VerificationRequest, db: Session = Depends(get_db)):
+    """
+    Sprint 5: records a HUMAN verification decision (VERIFIED or REJECTED)
+    for an already-analyzed report. Never modifies the AI-generated
+    Observation — only writes a new audit event and updates
+    `report.verification_status`. 404 if the report doesn't exist, 409 if
+    it hasn't finished AI analysis (nothing to verify yet), 422
+    automatically for an invalid `status` value (e.g. "UNVERIFIED", which
+    isn't a valid target for this action — see VerificationRequest).
+    """
+    try:
+        return submit_verification(db, report_id, request)
+    except ReportNotFoundError:
+        raise HTTPException(status_code=404, detail="Report not found.")
+    except ReportNotAnalyzedError:
+        raise HTTPException(status_code=409, detail="Report has not completed AI analysis yet.")
+
+
+@router.get("/{report_id}/verification", response_model=VerificationHistoryOut)
+def get_report_verification(report_id: uuid.UUID, db: Session = Depends(get_db)):
+    """
+    Sprint 5: current verification state + full audit history for this
+    report. Unlike POST /verify, this does NOT require ANALYZED status —
+    viewing an unanalyzed report's (default UNVERIFIED, empty-history)
+    state is harmless. Only 404 applies here.
+    """
+    try:
+        return get_verification_history(db, report_id)
+    except ReportNotFoundError:
+        raise HTTPException(status_code=404, detail="Report not found.")

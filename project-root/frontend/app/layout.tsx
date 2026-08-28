@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Aqua Sentinel",
-  description: "Citizen stream observations for the OneAquaHealth hackathon.",
+  description: "Citizen stream observations for Aqua Sentinel.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import ReportForm from "@/components/ReportForm";
 
 export default function HomePage() {
@@ -9,6 +10,11 @@ export default function HomePage() {
         water quality — it records an observation for review.
       </p>
       <ReportForm />
+      <div className="mt-8 border-t border-slate-200 pt-4">
+        <Link href="/dashboard" className="text-sm text-blue-600 hover:underline">
+          Officer dashboard →
+        </Link>
+      </div>
     </main>
   );
 }

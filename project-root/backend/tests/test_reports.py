@@ -14,7 +14,7 @@ def test_create_report_success(client, sample_image_bytes):
     assert body["status"] == "SUBMITTED"
     assert body["description"] == "Greenish tint near the ghat steps."
     assert body["location"]["stream_name"] == "Sabarmati"
-    assert body["observation"] is None  # not populated until AI service runs (later sprint)
+    assert body["observation"] is None  # AI analysis is network-blocked in tests (see conftest); reverts to SUBMITTED
 
 
 def test_create_report_rejects_bad_content_type(client):
