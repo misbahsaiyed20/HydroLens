@@ -1,3 +1,44 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    font-feature-settings: "cv11", "ss01";
+  }
+  h1, h2, h3 {
+    letter-spacing: -0.01em;
+  }
+  *:focus-visible {
+    outline: 2px solid theme("colors.aqua.400");
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer utilities {
+  .card {
+    @apply rounded-card border border-ocean-100 bg-white shadow-card;
+  }
+  .card-interactive {
+    @apply card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover hover:border-aqua-200;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-ocean-800 px-4 py-2.5 text-sm font-medium text-white transition-colors duration-150 hover:bg-ocean-700 active:bg-ocean-900 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-ocean-200 bg-white px-4 py-2.5 text-sm font-medium text-ocean-800 transition-colors duration-150 hover:bg-ocean-50 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .input-field {
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-aqua-400;
+  }
+  .label-field {
+    @apply mb-1.5 block text-sm font-medium text-ocean-800;
+  }
+  .section-title {
+    @apply text-xs font-semibold uppercase tracking-wider text-ocean-500;
+  }
+}

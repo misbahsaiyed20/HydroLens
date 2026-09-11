@@ -1,6 +1,21 @@
 import enum
 
 
+class UserRole(str, enum.Enum):
+    """
+    Authentication role. CITIZEN can submit reports and view their own
+    report history. REVIEWER can access the dashboard/cases/evidence and
+    record verification decisions. Deliberately just two roles — this is a
+    personal project, not a multi-tenant platform, so no admin/org layer is
+    added. Public signup (POST /auth/signup) always creates CITIZEN; a
+    REVIEWER can only be created via the controlled bootstrap script (see
+    scripts/create_reviewer.py) or by promoting a row directly in the DB —
+    never from a client-supplied field.
+    """
+    CITIZEN = "CITIZEN"
+    REVIEWER = "REVIEWER"
+
+
 class ReportStatus(str, enum.Enum):
     """
     Lifecycle of a citizen report.

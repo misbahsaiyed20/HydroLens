@@ -5,7 +5,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.core.deps import require_reviewer
 from app.database import get_db
+from app.models.user import User
 from app.schemas.case import CaseDetail, CaseListResult
 from app.services.case_service import get_case_detail, list_cases
 from app.services.evidence_fusion_service import ReportNotAnalyzedError, ReportNotFoundError
@@ -16,6 +18,7 @@ router = APIRouter(prefix="/cases", tags=["cases"])
 @router.get("", response_model=CaseListResult)
 def get_cases(
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_reviewer),
     confidence_level: Optional[str] = Query(default=None, pattern="^(LOW|MODERATE|HIGH)$"),
     exposure_risk_level: Optional[str] = Query(default=None, pattern="^(LOW|MODERATE|ELEVATED)$"),
     action_level: Optional[str] = Query(default=None, pattern="^(CONTINUE_MONITORING|REVIEW_RECOMMENDED|PRIORITY_REVIEW)$"),
@@ -48,7 +51,7 @@ def get_cases(
 
 
 @router.get("/{report_id}", response_model=CaseDetail)
-def get_case(report_id: uuid.UUID, db: Session = Depends(get_db)):
+def get_case(report_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(require_reviewer)):
     try:
         return get_case_detail(db, report_id)
     except ReportNotFoundError:

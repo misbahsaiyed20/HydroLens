@@ -1,11 +1,15 @@
 import uuid
+import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File, Form, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.deps import get_current_user, require_reviewer
 from app.database import get_db
+from app.models.enums import UserRole
 from app.models.report import Report
 from app.models.location import Location
+from app.models.user import User
 from app.schemas.report import ReportOut, ReportListOut
 from app.schemas.evidence import EvidenceFusionResult
 from app.schemas.actionability import ActionabilityResult
@@ -22,6 +26,7 @@ from app.schemas.verification import VerificationRequest, VerificationHistoryOut
 from app.services.verification_service import get_verification_history, submit_verification
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+logger = logging.getLogger("aqua_sentinel")
 
 
 def _report_query(db: Session):
@@ -41,13 +46,20 @@ async def create_report(
     description: str | None = Form(default=None, max_length=2000),
     image: UploadFile = File(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Citizen submits a stream observation: photo + coordinates + optional
-    description. The report is created and returned as SUBMITTED
-    immediately; AI vision analysis (Sprint 2) then runs in the background
-    and moves it through ANALYZING -> ANALYZED, populating Observation.
-    Evidence fusion and case creation still come in later sprints.
+    Citizen (or reviewer) submits a stream observation: photo + coordinates
+    + optional description. Requires authentication — the report is
+    attributed to the submitting user via `user_id`. The report is created
+    and returned as SUBMITTED immediately; AI vision analysis (Sprint 2)
+    then runs in the background and moves it through ANALYZING -> ANALYZED,
+    populating Observation. Evidence fusion and case creation still come in
+    later sprints.
+
+    Note: `user_id` is nullable on the Report model and pre-auth rows exist
+    with it unset — this endpoint now always sets it, but nothing here
+    touches or reinterprets those older anonymous rows.
     """
     contents = await image.read()
     if not contents:
@@ -65,6 +77,7 @@ async def create_report(
     db.flush()  # get location.id without a full commit yet
 
     report = Report(
+        user_id=current_user.id,
         location_id=location.id,
         image_path=stored_filename,
         description=(description or None),
@@ -72,26 +85,50 @@ async def create_report(
     db.add(report)
     db.commit()
     db.refresh(report)
+    logger.info("report created: id=%s location=(%.4f,%.4f)", report.id, latitude, longitude)
 
     background_tasks.add_task(analyze_report_task, report.id)
 
     return _report_query(db).filter(Report.id == report.id).first()
 
 
+@router.get("/me", response_model=ReportListOut)
+def list_my_reports(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    """Citizen's (or reviewer's) own submission history."""
+    base = _report_query(db).filter(Report.user_id == current_user.id)
+    total = base.count()
+    items = base.order_by(Report.submitted_at.desc()).offset(offset).limit(limit).all()
+    return ReportListOut(total=total, items=items)
+
+
 @router.get("/{report_id}", response_model=ReportOut)
-def get_report(report_id: uuid.UUID, db: Session = Depends(get_db)):
+def get_report(
+    report_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     report = _report_query(db).filter(Report.id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found.")
+    # A citizen may only view their own report/status; a reviewer may view any.
+    if current_user.role != UserRole.REVIEWER and report.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You do not have access to this report.")
     return report
 
 
 @router.get("", response_model=ReportListOut)
 def list_reports(
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_reviewer),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ):
+    """Reviewer-only: full report list across all citizens. Citizens use GET /reports/me instead."""
     total = db.query(Report).count()
     items = (
         _report_query(db)
@@ -104,7 +141,9 @@ def list_reports(
 
 
 @router.get("/{report_id}/evidence", response_model=EvidenceFusionResult)
-def get_report_evidence(report_id: uuid.UUID, db: Session = Depends(get_db)):
+def get_report_evidence(
+    report_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(require_reviewer)
+):
     """
     Sprint 3: fuses related reports + location baseline into an explainable
     confidence assessment for this report. 404 if the report doesn't exist;
@@ -122,7 +161,9 @@ def get_report_evidence(report_id: uuid.UUID, db: Session = Depends(get_db)):
 
 
 @router.get("/{report_id}/actionability", response_model=ActionabilityResult)
-def get_report_actionability(report_id: uuid.UUID, db: Session = Depends(get_db)):
+def get_report_actionability(
+    report_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(require_reviewer)
+):
     """
     Sprint 4: converts the existing evidence-fusion result into an
     operational review recommendation (CONTINUE_MONITORING /
@@ -140,7 +181,9 @@ def get_report_actionability(report_id: uuid.UUID, db: Session = Depends(get_db)
 
 
 @router.get("/{report_id}/fhir")
-def get_report_fhir(report_id: uuid.UUID, db: Session = Depends(get_db)) -> dict:
+def get_report_fhir(
+    report_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(require_reviewer)
+) -> dict:
     """
     Sprint 4: FHIR-compatible Observation resource for this report (see
     fhir_service.py). No response_model is declared — FHIR resources are
@@ -158,7 +201,12 @@ def get_report_fhir(report_id: uuid.UUID, db: Session = Depends(get_db)) -> dict
 
 
 @router.post("/{report_id}/verify", response_model=VerificationHistoryOut)
-def verify_report(report_id: uuid.UUID, request: VerificationRequest, db: Session = Depends(get_db)):
+def verify_report(
+    report_id: uuid.UUID,
+    request: VerificationRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_reviewer),
+):
     """
     Sprint 5: records a HUMAN verification decision (VERIFIED or REJECTED)
     for an already-analyzed report. Never modifies the AI-generated
@@ -169,7 +217,18 @@ def verify_report(report_id: uuid.UUID, request: VerificationRequest, db: Sessio
     isn't a valid target for this action — see VerificationRequest).
     """
     try:
-        return submit_verification(db, report_id, request)
+        # verifier_reference always reflects the authenticated reviewer,
+        # never a client-supplied string (see VerificationRequest
+        # docstring) — this also fixes a real gap where the frontend
+        # never sent this now-required-by-convention identity field at
+        # all, which would otherwise 422 on every verify/reject attempt.
+        request.verifier_reference = current_user.email or current_user.display_name or str(current_user.id)
+        result = submit_verification(db, report_id, request)
+        # Verifier reference/note are user-supplied free text and are NOT
+        # logged verbatim (Phase 5: no unnecessary personal data in logs)
+        # — only the status transition and report id.
+        logger.info("report %s verification -> %s", report_id, result.verification_status)
+        return result
     except ReportNotFoundError:
         raise HTTPException(status_code=404, detail="Report not found.")
     except ReportNotAnalyzedError:
@@ -177,7 +236,9 @@ def verify_report(report_id: uuid.UUID, request: VerificationRequest, db: Sessio
 
 
 @router.get("/{report_id}/verification", response_model=VerificationHistoryOut)
-def get_report_verification(report_id: uuid.UUID, db: Session = Depends(get_db)):
+def get_report_verification(
+    report_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(require_reviewer)
+):
     """
     Sprint 5: current verification state + full audit history for this
     report. Unlike POST /verify, this does NOT require ANALYZED status —

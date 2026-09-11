@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     # severity to still escalate to PRIORITY_REVIEW rather than REVIEW_RECOMMENDED.
     priority_review_min_supporting_count: int = 3
 
+    # --- Authentication ---
+    # No default in production: an empty/placeholder secret would let anyone
+    # forge tokens. Tests set this via env (see conftest.py); real deployments
+    # must set JWT_SECRET_KEY in their environment (see .env.example).
+    jwt_secret_key: str = ""
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 60 * 24  # 24h
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property

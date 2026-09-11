@@ -1,0 +1,48 @@
+# Local development compose. NOT build-tested (no Docker daemon in the
+# environment this was written in) — reviewed by hand, verify before use.
+#
+#   docker compose up --build
+#   docker compose exec backend alembic upgrade head   # first run only
+#
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: aqua_sentinel
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: ./backend
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/aqua_sentinel
+      CORS_ORIGINS: http://localhost:3000
+      UPLOAD_DIR: uploads
+      # Set your real key in a local .env / docker-compose.override.yml —
+      # never commit a real key here.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      ENVIRONMENT: development
+    volumes:
+      - backend_uploads:/app/uploads
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+volumes:
+  db_data:
+  backend_uploads:

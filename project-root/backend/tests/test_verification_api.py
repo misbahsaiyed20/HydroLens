@@ -8,12 +8,14 @@ def test_verify_endpoint_success(client, db_session):
     report = make_analyzed_report(db_session)
     response = client.post(
         f"/api/reports/{report.id}/verify",
-        json={"status": "VERIFIED", "verifier_reference": "reviewer_1", "note": "looks right"},
+        json={"status": "VERIFIED", "note": "looks right"},
     )
     assert response.status_code == 200
     body = response.json()
     assert body["verification_status"] == "VERIFIED"
-    assert body["latest_verifier_reference"] == "reviewer_1"
+    # verifier_reference is now derived from the authenticated reviewer
+    # server-side (see api/reports.py) — never client-supplied.
+    assert body["latest_verifier_reference"] == "reviewer@example.com"
     assert body["latest_note"] == "looks right"
 
 
@@ -62,10 +64,13 @@ def test_verify_endpoint_blank_verifier_is_422(client, db_session):
     assert response.status_code == 422
 
 
-def test_verify_endpoint_missing_verifier_is_422(client, db_session):
+def test_verify_endpoint_without_client_supplied_verifier_still_succeeds(client, db_session):
+    # verifier_reference is optional in the request body now — the route
+    # always derives the real value from the authenticated reviewer.
     report = make_analyzed_report(db_session)
     response = client.post(f"/api/reports/{report.id}/verify", json={"status": "VERIFIED"})
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json()["latest_verifier_reference"] == "reviewer@example.com"
 
 
 def test_verification_endpoint_reflects_state(client, db_session):
@@ -88,7 +93,7 @@ def test_verify_creates_audit_record_with_actor_and_transition(client, db_sessio
     report = make_analyzed_report(db_session)
     client.post(
         f"/api/reports/{report.id}/verify",
-        json={"status": "VERIFIED", "verifier_reference": "reviewer_1", "note": "confirmed"},
+        json={"status": "VERIFIED", "note": "confirmed"},
     )
 
     history = client.get(f"/api/reports/{report.id}/verification").json()
@@ -96,7 +101,7 @@ def test_verify_creates_audit_record_with_actor_and_transition(client, db_sessio
     assert event["report_id"] == str(report.id)
     assert event["previous_status"] == "UNVERIFIED"
     assert event["new_status"] == "VERIFIED"
-    assert event["verifier_reference"] == "reviewer_1"
+    assert event["verifier_reference"] == "reviewer@example.com"
     assert event["note"] == "confirmed"
     assert "created_at" in event and event["created_at"]
 

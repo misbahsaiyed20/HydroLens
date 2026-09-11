@@ -1,31 +1,43 @@
-const STYLES: Record<string, { bg: string; text: string; icon: string; label?: string }> = {
-  // confidence / severity / exposure levels
-  LOW: { bg: "bg-slate-100", text: "text-slate-700", icon: "○" },
-  NONE: { bg: "bg-slate-100", text: "text-slate-500", icon: "–" },
-  MODERATE: { bg: "bg-amber-100", text: "text-amber-800", icon: "◐" },
-  HIGH: { bg: "bg-red-100", text: "text-red-800", icon: "●" },
-  ELEVATED: { bg: "bg-red-100", text: "text-red-800", icon: "●" },
+import { Icon } from "@/components/ui/Icon";
 
-  // verification
-  UNVERIFIED: { bg: "bg-slate-100", text: "text-slate-600", icon: "?" },
-  VERIFIED: { bg: "bg-emerald-100", text: "text-emerald-800", icon: "✓" },
-  REJECTED: { bg: "bg-slate-200", text: "text-slate-500", icon: "✕" },
+type Tone = "neutral" | "info" | "caution" | "critical" | "success";
 
-  // action level
-  CONTINUE_MONITORING: { bg: "bg-slate-100", text: "text-slate-700", icon: "○", label: "Continue monitoring" },
-  REVIEW_RECOMMENDED: { bg: "bg-amber-100", text: "text-amber-800", icon: "◐", label: "Review recommended" },
-  PRIORITY_REVIEW: { bg: "bg-red-100", text: "text-red-800", icon: "●", label: "Priority review" },
+const TONE_STYLES: Record<Tone, string> = {
+  neutral: "bg-slate-100 text-slate-600 ring-slate-200",
+  info: "bg-aqua-50 text-aqua-700 ring-aqua-200",
+  caution: "bg-amber-50 text-amber-800 ring-amber-200",
+  critical: "bg-rose-50 text-rose-700 ring-rose-200",
+  success: "bg-moss-50 text-moss-700 ring-moss-200",
 };
 
-export default function Badge({ value }: { value: string }) {
-  const style = STYLES[value] || { bg: "bg-slate-100", text: "text-slate-700", icon: "•" };
-  const label = style.label || value.replace(/_/g, " ");
+const CONFIG: Record<string, { tone: Tone; icon: keyof typeof Icon; label?: string }> = {
+  LOW: { tone: "neutral", icon: "Gauge" },
+  NONE: { tone: "neutral", icon: "Gauge" },
+  MODERATE: { tone: "caution", icon: "Gauge" },
+  HIGH: { tone: "critical", icon: "Warning" },
+  ELEVATED: { tone: "critical", icon: "Warning" },
+
+  UNVERIFIED: { tone: "neutral", icon: "Clock", label: "Unverified" },
+  VERIFIED: { tone: "success", icon: "Check", label: "Verified" },
+  REJECTED: { tone: "neutral", icon: "X", label: "Rejected" },
+
+  CONTINUE_MONITORING: { tone: "neutral", icon: "Gauge", label: "Continue monitoring" },
+  REVIEW_RECOMMENDED: { tone: "caution", icon: "Warning", label: "Review recommended" },
+  PRIORITY_REVIEW: { tone: "critical", icon: "Warning", label: "Priority review" },
+};
+
+export default function Badge({ value, size = "sm" }: { value: string; size?: "sm" | "md" }) {
+  const cfg = CONFIG[value] || { tone: "neutral" as Tone, icon: "Gauge" as const };
+  const label = cfg.label || value.replace(/_/g, " ");
+  const IconCmp = Icon[cfg.icon];
+  const sizing = size === "md" ? "px-3 py-1 text-sm" : "px-2.5 py-1 text-xs";
+
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${style.bg} ${style.text}`}
+      className={`inline-flex items-center gap-1.5 rounded-pill font-medium ring-1 ring-inset ${TONE_STYLES[cfg.tone]} ${sizing}`}
     >
-      <span aria-hidden="true">{style.icon}</span>
-      {label}
+      <IconCmp className="h-3.5 w-3.5" />
+      <span className="capitalize">{label.toLowerCase()}</span>
     </span>
   );
 }

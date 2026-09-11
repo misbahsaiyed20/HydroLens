@@ -101,29 +101,85 @@ export type CaseDetail = {
   fhir_url: string;
 };
 
-async function apiFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, { cache: "no-store" });
+export type ReportOut = {
+  id: string;
+  user_id: string | null;
+  image_path: string;
+  description: string | null;
+  status: string;
+  verification_status: string;
+  submitted_at: string;
+  updated_at: string;
+  location: Location;
+  observation: Observation | null;
+};
+
+export type ReportListResult = { total: number; items: ReportOut[] };
+
+async function apiFetch<T>(path: string, token?: string): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      cache: "no-store",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+  } catch {
+    throw new Error("Unable to connect to Aqua Sentinel. Please make sure the server is running.");
+  }
   if (!res.ok) {
-    throw new Error(`Request failed (${res.status}): ${path}`);
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail ? String(body.detail) : `Request failed (${res.status}): ${path}`);
   }
   return res.json();
 }
 
-export function getDashboardSummary() {
-  return apiFetch<DashboardSummary>("/dashboard/summary");
+export function getDashboardSummary(token: string) {
+  return apiFetch<DashboardSummary>("/dashboard/summary", token);
 }
 
-export function getCases(params: Record<string, string | number | undefined> = {}) {
+export function getCases(token: string, params: Record<string, string | number | undefined> = {}) {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== "") query.set(k, String(v));
   });
   const qs = query.toString();
-  return apiFetch<CaseListResult>(`/cases${qs ? `?${qs}` : ""}`);
+  return apiFetch<CaseListResult>(`/cases${qs ? `?${qs}` : ""}`, token);
 }
 
-export function getCaseDetail(reportId: string) {
-  return apiFetch<CaseDetail>(`/cases/${reportId}`);
+export function getCaseDetail(token: string, reportId: string) {
+  return apiFetch<CaseDetail>(`/cases/${reportId}`, token);
+}
+
+export function getMyReports(token: string) {
+  return apiFetch<ReportListResult>("/reports/me", token);
+}
+
+export function submitVerification(token: string, reportId: string, status: "VERIFIED" | "REJECTED", note?: string) {
+  return apiFetch2<CaseDetail["verification_history"][number]>(`/reports/${reportId}/verify`, token, {
+    method: "POST",
+    body: JSON.stringify({ status, note: note || undefined }),
+  });
+}
+
+async function apiFetch2<T>(path: string, token: string, options: RequestInit): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    throw new Error("Unable to connect to Aqua Sentinel. Please make sure the server is running.");
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail ? String(body.detail) : `Request failed (${res.status}): ${path}`);
+  }
+  return res.json();
+}
+
+export function getFhirResource(token: string, reportId: string) {
+  return apiFetch<Record<string, unknown>>(`/reports/${reportId}/fhir`, token);
 }
 
 export function getFhirUrl(reportId: string) {

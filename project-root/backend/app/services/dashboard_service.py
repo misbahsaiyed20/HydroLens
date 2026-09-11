@@ -30,6 +30,14 @@ def get_dashboard_summary(db: Session) -> DashboardSummary:
     cases_requiring_review = 0
 
     analyzed_ids = [r.id for r in db.query(Report.id).filter(Report.status == ReportStatus.ANALYZED).all()]
+    # Sprint 7 perf review (Phase 12): this loop calls evidence-fusion once
+    # per analyzed report — the only real cost on this endpoint (everything
+    # above is a single indexed COUNT query). No literal N+1 lazy-load bug
+    # exists here (location/observation are already eager-loaded inside
+    # evidence_fusion_service), this is inherent recomputation cost.
+    # Documented as a scale limitation rather than "fixed" — the real fix
+    # (persisting/caching confidence_score on write) is a bigger, separate
+    # design decision than this sprint's scope.
     for report_id in analyzed_ids:
         evidence = get_evidence_for_report(db, report_id)
         if evidence.confidence_level == "HIGH":

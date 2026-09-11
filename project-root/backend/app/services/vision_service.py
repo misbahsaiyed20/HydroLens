@@ -22,7 +22,48 @@ settings = get_settings()
 
 class VisionAnalysisError(Exception):
     """Raised for any failure that prevents returning usable indicators
-    (missing API key, network/HTTP failure, or an unparseable response)."""
+    (missing API key, network/HTTP failure, unparseable response, or a
+    response that parses as JSON but fails schema validation)."""
+
+
+# The exact value sets the prompt asks Gemini for. Used to validate the
+# model's response before it's persisted — Sprint 7 hardening: a malformed
+# or hallucinated response (wrong type, out-of-range confidence, an
+# invented category not in these sets) must be rejected here, not silently
+# written to the database as if it were valid.
+_ALGAE_VALUES = {"none", "low", "moderate", "high", "unclear"}
+_TURBIDITY_VALUES = {"clear", "slightly_cloudy", "cloudy", "opaque", "unclear"}
+_IMAGE_QUALITY_VALUES = {"good", "blurry", "poor_lighting", "too_far", "unclear"}
+
+
+def _validate_indicators(indicators: dict) -> dict:
+    if not isinstance(indicators, dict):
+        raise VisionAnalysisError("Model response was not a JSON object.")
+
+    required = {
+        "algae_indicator", "color_anomaly", "visible_waste",
+        "turbidity_indicator", "image_quality", "model_confidence",
+    }
+    missing = required - indicators.keys()
+    if missing:
+        raise VisionAnalysisError(f"Model response missing required field(s): {sorted(missing)}")
+
+    if indicators["algae_indicator"] not in _ALGAE_VALUES:
+        raise VisionAnalysisError(f"Invalid algae_indicator: {indicators['algae_indicator']!r}")
+    if indicators["turbidity_indicator"] not in _TURBIDITY_VALUES:
+        raise VisionAnalysisError(f"Invalid turbidity_indicator: {indicators['turbidity_indicator']!r}")
+    if indicators["image_quality"] not in _IMAGE_QUALITY_VALUES:
+        raise VisionAnalysisError(f"Invalid image_quality: {indicators['image_quality']!r}")
+    if not isinstance(indicators["visible_waste"], bool):
+        raise VisionAnalysisError(f"visible_waste must be a boolean, got: {indicators['visible_waste']!r}")
+    if not isinstance(indicators["color_anomaly"], str):
+        raise VisionAnalysisError(f"color_anomaly must be a string, got: {indicators['color_anomaly']!r}")
+
+    confidence = indicators["model_confidence"]
+    if not isinstance(confidence, (int, float)) or isinstance(confidence, bool) or not (0.0 <= float(confidence) <= 1.0):
+        raise VisionAnalysisError(f"model_confidence must be a number in [0, 1], got: {confidence!r}")
+
+    return indicators
 
 
 INDICATOR_PROMPT = """You are assisting an environmental-monitoring pipeline that reviews \
@@ -94,4 +135,4 @@ def analyze_image(image_path: Path) -> dict:
     except (KeyError, IndexError, json.JSONDecodeError) as exc:
         raise VisionAnalysisError(f"Couldn't parse Gemini response: {exc}") from exc
 
-    return indicators
+    return _validate_indicators(indicators)

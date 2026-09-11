@@ -14,23 +14,25 @@ class VerificationRequest(BaseModel):
     behavior the spec asks for; Pydantic/FastAPI produces that
     automatically for a Literal type, no extra code needed).
 
-    `verifier_reference` is a free-text identifier (name/email/username) —
-    NOT an authenticated identity. There is no login system in this
-    project yet; this field exists so the architecture has a place for a
-    real authenticated user reference once auth is added, without
-    pretending that authentication already exists.
+    `verifier_reference` now comes from the AUTHENTICATED reviewer
+    (current_user.email, set server-side in the /verify route) — never
+    trusted from the client. It's optional here only so a client-supplied
+    value is accepted for backward compatibility with direct API callers;
+    the route always overwrites it with the real authenticated identity
+    before this reaches the service layer, so the audit trail can't be
+    spoofed by whatever a caller puts in the request body.
     """
 
     status: Literal["VERIFIED", "REJECTED"]
-    verifier_reference: str = Field(..., min_length=1, max_length=200)
+    verifier_reference: Optional[str] = Field(default=None, max_length=200)
     note: Optional[str] = Field(default=None, max_length=2000)
 
     @field_validator("verifier_reference")
     @classmethod
-    def not_blank(cls, v: str) -> str:
-        if not v.strip():
+    def not_blank(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not v.strip():
             raise ValueError("verifier_reference cannot be blank")
-        return v.strip()
+        return v.strip() if v else v
 
 
 class VerificationEventOut(BaseModel):

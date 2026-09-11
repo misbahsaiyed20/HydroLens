@@ -33,13 +33,14 @@ def analyze_report_task(report_id: uuid.UUID) -> None:
 
         report.status = ReportStatus.ANALYZING
         db.commit()
+        logger.info("analysis started for report %s", report_id)
 
         image_path = Path(settings.upload_dir) / report.image_path
 
         try:
             indicators = analyze_image(image_path)
         except VisionAnalysisError as exc:
-            logger.error("Vision analysis failed for report %s: %s", report_id, exc)
+            logger.error("analysis failed for report %s: %s", report_id, exc)
             report.status = ReportStatus.SUBMITTED  # revert so it's retriable, not stuck
             db.commit()
             return
@@ -56,5 +57,6 @@ def analyze_report_task(report_id: uuid.UUID) -> None:
         db.add(observation)
         report.status = ReportStatus.ANALYZED
         db.commit()
+        logger.info("analysis succeeded for report %s", report_id)
     finally:
         db.close()
