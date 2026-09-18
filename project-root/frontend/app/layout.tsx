@@ -4,8 +4,8 @@ import Nav from "@/components/Nav";
 import { AuthProvider } from "@/contexts/AuthContext";
 
 export const metadata: Metadata = {
-  title: "Aqua Sentinel",
-  description: "Environmental intelligence for local streams — from citizen observations to trustworthy signal.",
+  title: "HydroLens",
+  description: "AI-powered environmental intelligence for citizen-reported water observations.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

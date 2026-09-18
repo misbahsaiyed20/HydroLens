@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/aqua_sentinel"
 
     # --- App ---
-    app_name: str = "Aqua Sentinel API"
+    app_name: str = "HydroLens API"
     environment: str = "development"
     api_prefix: str = "/api"
 

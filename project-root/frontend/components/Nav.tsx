@@ -45,7 +45,7 @@ export default function Nav() {
             <Icon.Droplet className="h-5 w-5" />
           </span>
           <span className="text-[15px] leading-tight">
-            Aqua Sentinel
+            HydroLens
             <span className="block text-[10px] font-medium uppercase tracking-wider text-ocean-400">
               Environmental Intelligence
             </span>
