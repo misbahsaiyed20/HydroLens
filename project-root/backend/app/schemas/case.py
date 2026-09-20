@@ -11,12 +11,8 @@ from app.schemas.verification import VerificationEventOut
 
 
 class CaseSummary(BaseModel):
-    """One row in GET /api/cases — no Case DB table exists; a "case" is an
-    ANALYZED report viewed through its evidence-fusion + actionability +
-    verification results (all computed live from existing services, never
-    duplicated logic — see case_service.py)."""
-
     report_id: uuid.UUID
+    image_path: str
     location: LocationOut
     condition_summary: str
     confidence_score: float
@@ -36,11 +32,8 @@ class CaseListResult(BaseModel):
 
 
 class CaseDetail(BaseModel):
-    """Full case detail — combines ReportOut-level data with the existing
-    evidence/actionability/verification results. Does not duplicate FHIR
-    generation; points to the existing /fhir endpoint instead."""
-
     report_id: uuid.UUID
+    image_path: str
     status: str
     verification_status: str
     location: LocationOut

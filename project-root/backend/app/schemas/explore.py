@@ -13,6 +13,8 @@ class ExploreObservationOut(BaseModel):
     turbidity_indicator: Optional[str] = None
     algae_indicator: Optional[str] = None
     visible_waste: Optional[bool] = None
+    color_anomaly: Optional[str] = None
+    image_quality: Optional[str] = None
     verification_status: str
     submitted_at: datetime
 

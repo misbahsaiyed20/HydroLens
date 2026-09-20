@@ -23,6 +23,8 @@ def get_cases(
     exposure_risk_level: Optional[str] = Query(default=None, pattern="^(LOW|MODERATE|ELEVATED)$"),
     action_level: Optional[str] = Query(default=None, pattern="^(CONTINUE_MONITORING|REVIEW_RECOMMENDED|PRIORITY_REVIEW)$"),
     verification_status: Optional[str] = Query(default=None, pattern="^(UNVERIFIED|VERIFIED|REJECTED)$"),
+    search: Optional[str] = Query(default=None, max_length=120),
+    review_needed: Optional[bool] = Query(default=None),
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
     lat: Optional[float] = None,
@@ -31,15 +33,14 @@ def get_cases(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ):
-    """A "case" is an ANALYZED report — see case_service.py docstring for
-    why there's no separate Case table. Search by report ID: use
-    GET /api/cases/{id} directly rather than a query param here."""
     return list_cases(
         db,
         confidence_level=confidence_level,
         exposure_risk_level=exposure_risk_level,
         action_level=action_level,
         verification_status=verification_status,
+        search=search,
+        review_needed=review_needed,
         date_from=date_from,
         date_to=date_to,
         lat=lat,

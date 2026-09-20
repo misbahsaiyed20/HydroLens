@@ -18,13 +18,18 @@ export default function Nav() {
       ? [
           { href: "/dashboard", label: "Dashboard" },
           { href: "/cases", label: "Cases" },
+          { href: "/review-reports", label: "Review queue" },
         ]
       : user?.role === "CITIZEN"
         ? [
             { href: "/", label: "Report" },
+            { href: "/explore", label: "Explore" },
             { href: "/my-reports", label: "My reports" },
           ]
-        : [{ href: "/", label: "Report" }];
+        : [
+            { href: "/", label: "Report" },
+            { href: "/explore", label: "Explore" },
+          ];
 
   function isActive(href: string) {
     if (href === "/") return pathname === "/";
@@ -46,9 +51,7 @@ export default function Nav() {
           </span>
           <span className="text-[15px] leading-tight">
             HydroLens
-            <span className="block text-[10px] font-medium uppercase tracking-wider text-ocean-400">
-              Environmental Intelligence
-            </span>
+            <span className="block text-[10px] font-medium uppercase tracking-wider text-ocean-400">Environmental Intelligence</span>
           </span>
         </Link>
 
@@ -57,9 +60,7 @@ export default function Nav() {
             <Link
               key={l.href}
               href={l.href}
-              className={`rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
-                isActive(l.href) ? "bg-ocean-800 text-white" : "text-ocean-700 hover:bg-ocean-50"
-              }`}
+              className={`rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${isActive(l.href) ? "bg-ocean-800 text-white" : "text-ocean-700 hover:bg-ocean-50"}`}
             >
               {l.label}
             </Link>
@@ -67,10 +68,7 @@ export default function Nav() {
 
           {user ? (
             <div className="relative ml-2">
-              <button
-                onClick={() => setMenuOpen((v) => !v)}
-                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-ocean-700 hover:bg-ocean-50"
-              >
+              <button onClick={() => setMenuOpen((v) => !v)} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-ocean-700 hover:bg-ocean-50">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-aqua-100 text-[11px] font-semibold text-aqua-700">
                   {(user.display_name || user.email || "?").charAt(0).toUpperCase()}
                 </span>
@@ -79,36 +77,20 @@ export default function Nav() {
               </button>
               {menuOpen && (
                 <div className="absolute right-0 mt-1 w-44 rounded-lg border border-ocean-100 bg-white py-1 shadow-card-hover">
-                  <div className="border-b border-ocean-100 px-3 py-2 text-xs text-ocean-400">
-                    {user.role === "REVIEWER" ? "Reviewer" : "Citizen"}
-                  </div>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full px-3 py-2 text-left text-sm text-rose-600 hover:bg-rose-50"
-                  >
-                    Log out
-                  </button>
+                  <div className="border-b border-ocean-100 px-3 py-2 text-xs text-ocean-400">{user.role === "REVIEWER" ? "Reviewer" : "Citizen"}</div>
+                  <button onClick={handleLogout} className="w-full px-3 py-2 text-left text-sm text-rose-600 hover:bg-rose-50">Log out</button>
                 </div>
               )}
             </div>
           ) : (
             <div className="ml-2 flex items-center gap-2">
-              <Link href="/login" className="rounded-lg px-3.5 py-2 text-sm font-medium text-ocean-700 hover:bg-ocean-50">
-                Log in
-              </Link>
-              <Link href="/signup" className="btn-primary px-3.5 py-2 text-sm">
-                Sign up
-              </Link>
+              <Link href="/login" className="rounded-lg px-3.5 py-2 text-sm font-medium text-ocean-700 hover:bg-ocean-50">Log in</Link>
+              <Link href="/signup" className="btn-primary px-3.5 py-2 text-sm">Sign up</Link>
             </div>
           )}
         </nav>
 
-        <button
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-ocean-700 hover:bg-ocean-50 sm:hidden"
-          onClick={() => setOpen((v) => !v)}
-          aria-label={open ? "Close menu" : "Open menu"}
-          aria-expanded={open}
-        >
+        <button className="flex h-9 w-9 items-center justify-center rounded-lg text-ocean-700 hover:bg-ocean-50 sm:hidden" onClick={() => setOpen((v) => !v)} aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open}>
           {open ? <Icon.X className="h-5 w-5" /> : <Icon.Menu className="h-5 w-5" />}
         </button>
       </div>
@@ -116,32 +98,16 @@ export default function Nav() {
       {open && (
         <nav className="border-t border-ocean-100 bg-white px-4 py-2 sm:hidden">
           {links.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              onClick={() => setOpen(false)}
-              className={`block rounded-lg px-3 py-2.5 text-sm font-medium ${
-                isActive(l.href) ? "bg-ocean-800 text-white" : "text-ocean-700 hover:bg-ocean-50"
-              }`}
-            >
+            <Link key={l.href} href={l.href} onClick={() => setOpen(false)} className={`block rounded-lg px-3 py-2.5 text-sm font-medium ${isActive(l.href) ? "bg-ocean-800 text-white" : "text-ocean-700 hover:bg-ocean-50"}`}>
               {l.label}
             </Link>
           ))}
           {user ? (
-            <button
-              onClick={handleLogout}
-              className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium text-rose-600 hover:bg-rose-50"
-            >
-              Log out ({user.display_name || user.email})
-            </button>
+            <button onClick={handleLogout} className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium text-rose-600 hover:bg-rose-50">Log out ({user.display_name || user.email})</button>
           ) : (
             <>
-              <Link href="/login" onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm font-medium text-ocean-700 hover:bg-ocean-50">
-                Log in
-              </Link>
-              <Link href="/signup" onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm font-medium text-ocean-700 hover:bg-ocean-50">
-                Sign up
-              </Link>
+              <Link href="/login" onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm font-medium text-ocean-700 hover:bg-ocean-50">Log in</Link>
+              <Link href="/signup" onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm font-medium text-ocean-700 hover:bg-ocean-50">Sign up</Link>
             </>
           )}
         </nav>

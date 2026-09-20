@@ -21,6 +21,7 @@ export type Location = {
 
 export type CaseSummary = {
   report_id: string;
+  image_path: string;
   location: Location;
   condition_summary: string;
   confidence_score: number;
@@ -101,6 +102,8 @@ export type ExploreObservation = {
   turbidity_indicator: string | null;
   algae_indicator: string | null;
   visible_waste: boolean | null;
+  color_anomaly: string | null;
+  image_quality: string | null;
   verification_status: "UNVERIFIED" | "VERIFIED" | "REJECTED";
   submitted_at: string;
 };
@@ -112,6 +115,7 @@ export type ExploreListResult = {
 
 export type CaseDetail = {
   report_id: string;
+  image_path: string;
   status: string;
   verification_status: string;
   location: Location;
@@ -151,11 +155,28 @@ async function apiFetch<T>(path: string, token?: string): Promise<T> {
   return res.json();
 }
 
+async function apiFetch2<T>(path: string, token: string, options: RequestInit): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    throw new Error("Unable to connect to HydroLens. Please check the API connection.");
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail ? String(body.detail) : `Request failed (${res.status}): ${path}`);
+  }
+  return res.json();
+}
+
 export function getDashboardSummary(token: string) {
   return apiFetch<DashboardSummary>("/dashboard/summary", token);
 }
 
-export function getCases(token: string, params: Record<string, string | number | undefined> = {}) {
+export function getCases(token: string, params: Record<string, string | number | boolean | undefined> = {}) {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== "") query.set(k, String(v));
@@ -176,12 +197,29 @@ export function getReport(token: string, reportId: string) {
   return apiFetch<ReportOut>(`/reports/${reportId}`, token);
 }
 
-export function getExploreObservations(limit = 12, offset = 0) {
+export function getReviewerReports(token: string, params: Record<string, string | number | undefined> = {}) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== "") query.set(k, String(v));
+  });
+  const qs = query.toString();
+  return apiFetch<ReportListResult>(`/reports${qs ? `?${qs}` : ""}`, token);
+}
+
+export function getExploreObservations(limit = 24, offset = 0) {
   return apiFetch<ExploreListResult>(`/reports/explore?limit=${limit}&offset=${offset}`);
 }
 
+export function getExploreObservation(reportId: string) {
+  return apiFetch<ExploreObservation>(`/reports/explore/${reportId}`);
+}
+
 export function getImageUrl(imagePath: string) {
-  return `${API_ORIGIN}/uploads/${encodeURIComponent(imagePath)}`;
+  if (!imagePath) return "";
+  if (/^https?:\/\//i.test(imagePath)) return imagePath;
+  const clean = imagePath.replace(/^\/+/, "").replace(/^uploads\/+/, "");
+  const encoded = clean.split("/").map(encodeURIComponent).join("/");
+  return `${API_ORIGIN}/uploads/${encoded}`;
 }
 
 export function submitVerification(token: string, reportId: string, status: "VERIFIED" | "REJECTED", note?: string) {
@@ -189,23 +227,6 @@ export function submitVerification(token: string, reportId: string, status: "VER
     method: "POST",
     body: JSON.stringify({ status, note: note || undefined }),
   });
-}
-
-async function apiFetch2<T>(path: string, token: string, options: RequestInit): Promise<T> {
-  let res: Response;
-  try {
-    res = await fetch(`${API_BASE_URL}${path}`, {
-      ...options,
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    });
-  } catch {
-    throw new Error("Unable to connect to HydroLens. Please check the API connection.");
-  }
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    throw new Error(body?.detail ? String(body.detail) : `Request failed (${res.status}): ${path}`);
-  }
-  return res.json();
 }
 
 export function getFhirResource(token: string, reportId: string) {

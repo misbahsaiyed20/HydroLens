@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { CaseDetail, getCaseDetail, getFhirResource, submitVerification } from "@/lib/api";
+import { CaseDetail, getCaseDetail, getFhirResource, getImageUrl, submitVerification } from "@/lib/api";
 import Badge from "@/components/ui/Badge";
 import { LoadingState, ErrorState } from "@/components/ui/States";
 import EvidenceTimeline, { VerificationHistoryList } from "@/components/evidence/EvidenceTimeline";
@@ -147,6 +147,18 @@ function CaseDetailContent() {
             </span>
           )}
         </div>
+      </div>
+
+      <div className="overflow-hidden rounded-[24px] border border-ocean-200 bg-ocean-900 shadow-card">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={getImageUrl(c.image_path)}
+          alt="Water observation for this case"
+          className="aspect-[16/7] w-full object-cover"
+          onError={(event) => {
+            event.currentTarget.style.display = "none";
+          }}
+        />
       </div>
 
       {/* SIGNAL SUMMARY */}

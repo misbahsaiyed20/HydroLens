@@ -1,12 +1,5 @@
-"""
-A "case" is an ANALYZED report viewed through its evidence-fusion +
-actionability + verification results — there is no separate Case DB table
-(Phase 11: only add a new model if genuinely required; the existing
-Report/Observation/VerificationEvent tables already carry everything a
-case view needs). Filtering by confidence/exposure/action level requires
-computing evidence for each analyzed report — same O(n) caveat as
-dashboard_service.py, acceptable at this project's scale.
-"""
+"""Case views built from analyzed reports plus live evidence/actionability."""
+
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -28,6 +21,7 @@ from app.services.evidence_fusion_service import (
 def _to_summary(report, evidence, action) -> CaseSummary:
     return CaseSummary(
         report_id=report.id,
+        image_path=report.image_path,
         location=report.location,
         condition_summary=evidence.condition_summary,
         confidence_score=evidence.confidence_score,
@@ -54,6 +48,8 @@ def list_cases(
     lat: Optional[float] = None,
     lon: Optional[float] = None,
     radius_meters: Optional[float] = None,
+    search: Optional[str] = None,
+    review_needed: Optional[bool] = None,
     limit: int = 20,
     offset: int = 0,
 ) -> CaseListResult:
@@ -79,16 +75,34 @@ def list_cases(
             and haversine_meters(lat, lon, r.location.latitude, r.location.longitude) <= radius_meters
         ]
 
+    needle = (search or "").strip().lower()
     matched: list[CaseSummary] = []
+
     for report in reports:
+        if needle:
+            haystack = " ".join(
+                [
+                    str(report.id),
+                    report.location.stream_name or "",
+                    report.location.stream_segment or "",
+                ]
+            ).lower()
+            if needle not in haystack:
+                continue
+
         evidence = get_evidence_for_report(db, report.id)
         if confidence_level and evidence.confidence_level != confidence_level:
             continue
+
         action = build_actionability_result(evidence)
+
         if exposure_risk_level and action.exposure_risk_level != exposure_risk_level:
             continue
         if action_level and action.action_level != action_level:
             continue
+        if review_needed is True and action.action_level not in {"REVIEW_RECOMMENDED", "PRIORITY_REVIEW"}:
+            continue
+
         matched.append(_to_summary(report, evidence, action))
 
     total = len(matched)
@@ -118,6 +132,7 @@ def get_case_detail(db: Session, report_id: uuid.UUID) -> CaseDetail:
 
     return CaseDetail(
         report_id=report.id,
+        image_path=report.image_path,
         status=report.status.value,
         verification_status=report.verification_status.value,
         location=report.location,
