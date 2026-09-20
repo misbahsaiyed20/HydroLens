@@ -6,11 +6,12 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.deps import get_current_user, require_reviewer
 from app.database import get_db
-from app.models.enums import UserRole
+from app.models.enums import ReportStatus, UserRole
 from app.models.report import Report
 from app.models.location import Location
 from app.models.user import User
 from app.schemas.report import ReportOut, ReportListOut
+from app.schemas.explore import ExploreListOut, ExploreObservationOut
 from app.schemas.evidence import EvidenceFusionResult
 from app.schemas.actionability import ActionabilityResult
 from app.services.storage_service import save_report_image
@@ -27,6 +28,66 @@ from app.services.verification_service import get_verification_history, submit_v
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 logger = logging.getLogger("aqua_sentinel")
+
+
+
+def _public_condition_summary(report: Report) -> str:
+    observation = report.observation
+    if observation is None:
+        return "Awaiting AI analysis."
+    parts: list[str] = []
+    if observation.turbidity_indicator and observation.turbidity_indicator not in {"clear", "none"}:
+        parts.append(f"turbidity appears {observation.turbidity_indicator}")
+    if observation.algae_indicator and observation.algae_indicator != "none":
+        parts.append(f"algae indicator: {observation.algae_indicator}")
+    if observation.visible_waste:
+        parts.append("visible waste detected")
+    if observation.color_anomaly and observation.color_anomaly != "none":
+        parts.append(f"color anomaly: {observation.color_anomaly}")
+    if not parts:
+        return "No obvious visual anomaly recorded."
+    return "HydroLens detected " + ", ".join(parts) + "."
+
+
+@router.get("/explore", response_model=ExploreListOut)
+def explore_reports(
+    db: Session = Depends(get_db),
+    limit: int = Query(default=24, ge=1, le=60),
+    offset: int = Query(default=0, ge=0),
+):
+    """
+    Public, anonymized community view.
+
+    Only ANALYZED reports are exposed. Private user identity, descriptions,
+    exact coordinates, evidence-fusion details, and reviewer notes are omitted.
+    """
+    base = (
+        _report_query(db)
+        .join(Report.observation)
+        .filter(Report.status == ReportStatus.ANALYZED)
+    )
+    total = base.count()
+    reports = (
+        base.order_by(Report.submitted_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    items = [
+        ExploreObservationOut(
+            id=report.id,
+            stream_name=report.location.stream_name,
+            image_path=report.image_path,
+            condition_summary=_public_condition_summary(report),
+            turbidity_indicator=report.observation.turbidity_indicator if report.observation else None,
+            algae_indicator=report.observation.algae_indicator if report.observation else None,
+            visible_waste=report.observation.visible_waste if report.observation else None,
+            verification_status=report.verification_status.value,
+            submitted_at=report.submitted_at,
+        )
+        for report in reports
+    ]
+    return ExploreListOut(total=total, items=items)
 
 
 def _report_query(db: Session):
