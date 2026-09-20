@@ -1,4 +1,5 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api";
+const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, "");
 
 export type DashboardSummary = {
   total_reports: number;
@@ -77,6 +78,38 @@ export type Observation = {
   model_confidence: number | null;
 };
 
+export type ReportOut = {
+  id: string;
+  user_id: string | null;
+  image_path: string;
+  description: string | null;
+  status: string;
+  verification_status: string;
+  submitted_at: string;
+  updated_at: string;
+  location: Location;
+  observation: Observation | null;
+};
+
+export type ReportListResult = { total: number; items: ReportOut[] };
+
+export type ExploreObservation = {
+  id: string;
+  stream_name: string | null;
+  image_path: string;
+  condition_summary: string;
+  turbidity_indicator: string | null;
+  algae_indicator: string | null;
+  visible_waste: boolean | null;
+  verification_status: "UNVERIFIED" | "VERIFIED" | "REJECTED";
+  submitted_at: string;
+};
+
+export type ExploreListResult = {
+  total: number;
+  items: ExploreObservation[];
+};
+
 export type CaseDetail = {
   report_id: string;
   status: string;
@@ -101,21 +134,6 @@ export type CaseDetail = {
   fhir_url: string;
 };
 
-export type ReportOut = {
-  id: string;
-  user_id: string | null;
-  image_path: string;
-  description: string | null;
-  status: string;
-  verification_status: string;
-  submitted_at: string;
-  updated_at: string;
-  location: Location;
-  observation: Observation | null;
-};
-
-export type ReportListResult = { total: number; items: ReportOut[] };
-
 async function apiFetch<T>(path: string, token?: string): Promise<T> {
   let res: Response;
   try {
@@ -124,7 +142,7 @@ async function apiFetch<T>(path: string, token?: string): Promise<T> {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
   } catch {
-    throw new Error("Unable to connect to Aqua Sentinel. Please make sure the server is running.");
+    throw new Error("Unable to connect to HydroLens. Please check the API connection.");
   }
   if (!res.ok) {
     const body = await res.json().catch(() => null);
@@ -154,6 +172,18 @@ export function getMyReports(token: string) {
   return apiFetch<ReportListResult>("/reports/me", token);
 }
 
+export function getReport(token: string, reportId: string) {
+  return apiFetch<ReportOut>(`/reports/${reportId}`, token);
+}
+
+export function getExploreObservations(limit = 12, offset = 0) {
+  return apiFetch<ExploreListResult>(`/reports/explore?limit=${limit}&offset=${offset}`);
+}
+
+export function getImageUrl(imagePath: string) {
+  return `${API_ORIGIN}/uploads/${encodeURIComponent(imagePath)}`;
+}
+
 export function submitVerification(token: string, reportId: string, status: "VERIFIED" | "REJECTED", note?: string) {
   return apiFetch2<CaseDetail["verification_history"][number]>(`/reports/${reportId}/verify`, token, {
     method: "POST",
@@ -169,7 +199,7 @@ async function apiFetch2<T>(path: string, token: string, options: RequestInit): 
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     });
   } catch {
-    throw new Error("Unable to connect to Aqua Sentinel. Please make sure the server is running.");
+    throw new Error("Unable to connect to HydroLens. Please check the API connection.");
   }
   if (!res.ok) {
     const body = await res.json().catch(() => null);

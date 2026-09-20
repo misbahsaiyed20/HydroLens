@@ -18,10 +18,6 @@ export type TokenResponse = {
 
 const TOKEN_KEY = "aqua_sentinel_token";
 
-// Token lives in localStorage (not an httpOnly cookie) — the simplest fit for
-// this project's current architecture (no server-rendered session, no
-// separate auth service). It never touches NEXT_PUBLIC_* env vars or
-// anything bundled into client JS beyond what the user explicitly stores.
 export function getStoredToken(): string | null {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem(TOKEN_KEY);
@@ -43,11 +39,7 @@ async function authFetch<T>(path: string, options: RequestInit = {}): Promise<T>
       headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     });
   } catch {
-    // fetch() itself threw — the request never reached the server at all
-    // (backend down, wrong URL, CORS, offline). This is the actual source
-    // of the raw browser "Failed to fetch" TypeError; replace it with a
-    // message the user can act on.
-    throw new Error("Unable to connect to Aqua Sentinel. Please make sure the server is running.");
+    throw new Error("Unable to connect to HydroLens. Please check the API connection.");
   }
   if (!res.ok) {
     const body = await res.json().catch(() => null);
